@@ -127,9 +127,6 @@ export default {
       title: 'Prep',
     }
   },
-  head: {
-    title: 'Cook',
-  },
   computed: {
     currentRoute() {
       return this.$route.name

@@ -19,7 +19,7 @@
 
     <v-list
       class="flex d-flex flex-column pa-0 ma-0"
-      style="height: 57vh; overflow-y: auto"
+      style="height: 55vh; overflow-y: auto"
       two-line
     >
       <v-container

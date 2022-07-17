@@ -1,8 +1,6 @@
 export const state = () => ({
-  orders: [],
+  orders: {},
   orderItems: [],
-  orderItemCook: {}, // For keeping track of details about the cook of an item (when firing start), not sent to server
-  orderItemCooked: {}, // For keeping track of details about the cook of an item (when fired), not sent to server
 })
 
 export const mutations = {
@@ -12,18 +10,20 @@ export const mutations = {
   SET_ORDERITEMS(state, orderItems) {
     state.orderItems = orderItems
   },
-  SET_ORDERITEM_COOK(state, { id, time }) {
-    state.orderItemCook[id] = time
-    delete state.orderItemCooked[id] // Delete "Cooked" time if there
-  },
-  SET_ORDERITEM_COOKED(state, { id, time }) {
-    state.orderItemCooked[id] = time
+  REMOVE_ORDER(state, orderId) {
+    this._vm.$delete(state.orders, orderId)
+    // Remove orderItems associated with Order
+    for (let i = state.orderItems.length - 1; i >= 0; i--) {
+      if (state.orderItems[i].orderId === orderId) {
+        state.orderItems.splice(i, 1)
+      }
+    }
   },
   CHANGE_ORDERITEM_STATUS(state, { orderId, orderItemId, key, value }) {
     // Find OrderItem in orders[] and change
-    state.orders
-      .filter((order) => order.id === orderId)[0]
-      .orderItems.filter((item) => item.id === orderItemId)[0][key] = value
+    state.orders[orderId].orderItems.filter(
+      (item) => item.id === orderItemId
+    )[0][key] = value
     // Find OrderItem in orderItems[] and change
     state.orderItems.filter((item) => item.id === orderItemId)[0][key] = value
   },
@@ -37,17 +37,50 @@ export const actions = {
     if (res.status === 200 && res.data) {
       const orderItems = []
       // Parse order data and process attributes
-      // Extract OrderItems
-      res.data.forEach((order) => {
+      const orders = res.data.reduce(function (result, order, index, array) {
+        // Parse fields in order to appropriate format first
         order.orderNumber = String(order.orderNumber).padStart(3, '0')
         order.createdAt = new Date(order.createdAt)
+        order.completedAt = new Date(order.completedAt)
+        order.totalPrice = parseFloat(order.totalPrice)
 
-        // Process OrderItems
-        const items = order.orderItems.map((item) => {
-          const itemTmp = {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            ...item,
+        // Iterate over all order items and process to more useful form
+        order.categoryMapping = {} // Create a mappoing of all order categories and which orderItem.id is in each
+        order.menuItemMapping = {} // Create a mapping of all orderItems that are part of the same menuItem (grouping of multiple foods in a single order-able selection)
+        order.orderToMenuItemHashMap = {} // Hold the "inverse" of .menuItemMapping {orderId: menuItemhash}
+        order.singleItemMapping = [] // Create a list of all IDs that aren't part of a menuItem (a-la-cart items)
+        order.orderIdIndex = {}
+
+        for (const [index, item] of order.orderItems.entries()) {
+          // Relate orderItem to order
+          item.orderId = order.id
+          item.orderNumber = order.orderNumber
+          // Note index of OrderItem.id
+          order.orderIdIndex[item.id] = index
+          // Find orderItem category and store in Category mapping
+          const orderCategory = item.menuItem?.category
+            ? item.menuItem.category
+            : item.food?.category
+            ? item.food.category
+            : 'Other'
+          if (orderCategory in order.categoryMapping)
+            order.categoryMapping[orderCategory].push(item.id)
+          else order.categoryMapping[orderCategory] = [item.id]
+
+          // Find orderItems part of a menuItem and the same menuItemhash and note
+          if (item.menuItemhash && item.menuItem) {
+            order.orderToMenuItemHashMap[item.id] = item.menuItemhash
+            if (item.menuItemhash in order.menuItemMapping)
+              order.menuItemMapping[item.menuItemhash].orderItemIds.push(
+                item.id
+              )
+            else
+              order.menuItemMapping[item.menuItemhash] = {
+                menuItem: item.menuItem,
+                orderItemIds: [item.id],
+              }
+          } else {
+            order.singleItemMapping.push(item.id)
           }
 
           // simplifiy options
@@ -86,24 +119,23 @@ export const actions = {
           }
           item.options = optionsTemp
 
-          return itemTmp
-        })
-        // Sort by name
-        items.sort((a, b) => a.food.name.localeCompare(b.food.name))
-        // Add to running array
-        orderItems.push(...items)
-      })
+          // Push OrderItem to orderItems
+          orderItems.push(item)
+        }
+
+        // Done!
+        result[order.id] = order
+        return result
+      }, {})
 
       // Sort
-      res.data.sort((a, b) => a.createdAt - b.createdAt)
-      commit('SET_ORDERS', res.data)
+      commit('SET_ORDERS', orders)
       commit('SET_ORDERITEMS', orderItems)
     } else {
       alert("Couldn't load Orders, refresh the page and try again.")
     }
   },
   async setItemFiring({ commit }, { id, time, status }) {
-    commit('SET_ORDERITEM_COOK', { id, time })
     // Set to cooking on backend
     const res = await this.$api.orderItem.setOrderItemFiringStatus(
       id,
@@ -124,7 +156,6 @@ export const actions = {
     })
   },
   async setItemFired({ commit }, { id, time, status }) {
-    commit('SET_ORDERITEM_COOKED', { id, time })
     // Set to cooking on backend
     const res = await this.$api.orderItem.setOrderItemFiredStatus(
       id,
@@ -143,5 +174,31 @@ export const actions = {
       key: 'firedTime',
       value: time,
     })
+  },
+  async changeOrderItemStatus({ commit }, { orderItemId, readyStatus }) {
+    const res = await this.$api.orderItem.setOrderItemReadyStatus(
+      orderItemId,
+      readyStatus
+    )
+    if (res.status === 200 && res.data) {
+      commit('CHANGE_ORDERITEM_STATUS', {
+        orderId: res.data.orderId,
+        orderItemId,
+        key: 'ready',
+        value: readyStatus,
+      })
+    } else {
+      alert(
+        "Couldn't change Order Item status, refresh the page and try again."
+      )
+    }
+  },
+  async completeOrder({ commit }, orderId) {
+    const res = await this.$api.order.complete(orderId)
+    if (res.status === 200 && res.data) {
+      commit('REMOVE_ORDER', orderId)
+    } else {
+      alert("Couldn't complete order, refresh the page and try again.")
+    }
   },
 }
