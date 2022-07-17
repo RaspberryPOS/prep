@@ -106,6 +106,7 @@
 </template>
 
 <script>
+const faye = require('faye')
 export default {
   name: 'DefaultLayout',
   data() {
@@ -174,6 +175,74 @@ export default {
   },
   async created() {
     await this.$store.dispatch('orders/getOrders')
+    // Setup Faye listeners
+    const client = new faye.Client('http://192.168.1.84:8080/faye')
+
+    // Listen for order patches (cancelled or complete) and remove and alert cook
+    client.subscribe('/order/patch', (order) => {
+      if (order.complete || order.cancelled) {
+        this.$store.commit('orders/REMOVE_ORDER', order.id)
+        // Alert cook
+        if (order.complete) {
+          this.$dialog.notify.success(
+            `Order ${String(order.orderNumber).padStart(3, '0')} completed!`,
+            { position: 'top-left', timeout: 5000 }
+          )
+        } else {
+          this.$dialog.notify.error(
+            `Order ${String(order.orderNumber).padStart(3, '0')} cancelled!`,
+            { position: 'top-left', timeout: 0 }
+          )
+        }
+      }
+    })
+
+    // Listen for new orders (/order/post)
+    client.subscribe('/order/post', (order) => {
+      // Alert cook
+      this.$dialog.notify.info(
+        `New order (${String(order.orderNumber).padStart(3, '0')}) received!`,
+        { position: 'top-left', timeout: 5000 }
+      )
+      // Add order to store
+      this.$store.dispatch('orders/addOrder', order)
+    })
+
+    // Listen for orderItem changes
+    // firing, fired, ready
+    client.subscribe('/orderItem/patch', (orderItem) => {
+      console.log(orderItem)
+      this.$store.commit('orders/CHANGE_ORDERITEM_STATUS', {
+        orderId: orderItem.orderId,
+        orderItemId: orderItem.id,
+        key: 'fired',
+        value: orderItem.fired,
+      })
+      this.$store.commit('orders/CHANGE_ORDERITEM_STATUS', {
+        orderId: orderItem.orderId,
+        orderItemId: orderItem.id,
+        key: 'firedTime',
+        value: orderItem.firedTime,
+      })
+      this.$store.commit('orders/CHANGE_ORDERITEM_STATUS', {
+        orderId: orderItem.orderId,
+        orderItemId: orderItem.id,
+        key: 'firing',
+        value: orderItem.firing,
+      })
+      this.$store.commit('orders/CHANGE_ORDERITEM_STATUS', {
+        orderId: orderItem.orderId,
+        orderItemId: orderItem.id,
+        key: 'firingTime',
+        value: orderItem.firingTime,
+      })
+      this.$store.commit('orders/CHANGE_ORDERITEM_STATUS', {
+        orderId: orderItem.orderId,
+        orderItemId: orderItem.id,
+        key: 'ready',
+        value: orderItem.ready,
+      })
+    })
   },
 }
 </script>

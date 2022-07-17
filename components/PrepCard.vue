@@ -357,10 +357,6 @@ export default {
       }${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     },
     async completeOrder() {
-      this.$dialog.notify.success(
-        `Order ${this.order.orderNumber} completed!`,
-        { position: 'bottom-left', timeout: 5000 }
-      )
       await this.$store.dispatch('orders/completeOrder', this.order.id)
     },
   },
