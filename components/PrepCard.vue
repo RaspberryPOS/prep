@@ -316,22 +316,22 @@ export default {
         // Dispatch changes to make OrderItems not ready
         if (itemsMarkedNotReady.length > 0) {
           await Promise.all(
-            itemsMarkedNotReady.map(async (orderItemId) => {
-              await this.$store.dispatch('orders/changeOrderItemStatus', {
+            itemsMarkedNotReady.map((orderItemId) => {
+              return this.$api.orderItem.setOrderItemReadyStatus(
                 orderItemId,
-                readyStatus: false,
-              })
+                false
+              )
             })
           )
         }
         // Dispatch changes to make OrderItems ready
         if (itemsMarkedReady.length > 0) {
           await Promise.all(
-            itemsMarkedReady.map(async (orderItemId) => {
-              await this.$store.dispatch('orders/changeOrderItemStatus', {
+            itemsMarkedReady.map((orderItemId) => {
+              return this.$api.orderItem.setOrderItemReadyStatus(
                 orderItemId,
-                readyStatus: true,
-              })
+                true
+              )
             })
           )
         }
@@ -357,7 +357,7 @@ export default {
       }${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     },
     async completeOrder() {
-      await this.$store.dispatch('orders/completeOrder', this.order.id)
+      return await this.$api.order.complete(this.order.id)
     },
   },
 }

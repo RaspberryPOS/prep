@@ -214,57 +214,41 @@ export default {
         hours > 0 ? String(hours).padStart(2, '0') + ':' : ''
       }${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     },
-    startFire(id) {
-      this.$store.dispatch('orders/setItemFiring', {
-        id,
-        time: new Date(),
-        status: true,
-      })
+    async startFire(id) {
+      await this.$api.orderItem.setOrderItemFiringStatus(id, true, new Date())
       if (this.orderItemList.filter((item) => item.id === id)[0].fired)
-        this.$store.dispatch('orders/setItemFired', {
-          id,
-          status: false,
-          time: null,
-        })
+        await this.$api.orderItem.setOrderItemFiredStatus(id, false, null)
     },
     startFireAll() {
       const newTime = new Date()
       this.orderItemList
         .filter((i) => i.food.mustBeFired)
-        .forEach((item) => {
-          this.$store.dispatch('orders/setItemFiring', {
-            id: item.id,
-            time: newTime,
-            status: true,
-          })
+        .forEach(async (item) => {
+          await this.$api.orderItem.setOrderItemFiringStatus(
+            item.id,
+            true,
+            newTime
+          )
         })
       this.orderItemList
         .filter((i) => i.food.mustBeFired && i.fired)
-        .forEach((item) => {
-          this.$store.dispatch('orders/setItemFired', {
-            id: item.id,
-            time: null,
-            status: false,
-          })
+        .forEach(async (item) => {
+          await this.$api.orderItem.setOrderItemFiredStatus(
+            item.id,
+            false,
+            null
+          )
         })
     },
-    setFired(id) {
-      this.$store.dispatch('orders/setItemFired', {
-        id,
-        time: new Date(),
-        status: true,
-      })
+    async setFired(id) {
+      await this.$api.orderItem.setOrderItemFiredStatus(id, true, new Date())
     },
     setFiredAll() {
       const time = new Date()
       this.orderItemList
         .filter((i) => i.food.mustBeFired && !i.fired)
-        .forEach((item) => {
-          this.$store.dispatch('orders/setItemFired', {
-            id: item.id,
-            time,
-            status: true,
-          })
+        .forEach(async (item) => {
+          await this.$api.orderItem.setOrderItemFiredStatus(item.id, true, time)
         })
     },
     timeSinceAsString(startTime, endTime = new Date()) {

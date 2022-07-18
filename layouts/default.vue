@@ -176,7 +176,7 @@ export default {
   async created() {
     await this.$store.dispatch('orders/getOrders')
     // Setup Faye listeners
-    const client = new faye.Client('http://192.168.1.84:8080/faye')
+    const client = new faye.Client('http://localhost:8080/faye')
 
     // Listen for order patches (cancelled or complete) and remove and alert cook
     client.subscribe('/order/patch', (order) => {
@@ -211,7 +211,6 @@ export default {
     // Listen for orderItem changes
     // firing, fired, ready
     client.subscribe('/orderItem/patch', (orderItem) => {
-      console.log(orderItem)
       this.$store.commit('orders/CHANGE_ORDERITEM_STATUS', {
         orderId: orderItem.orderId,
         orderItemId: orderItem.id,
